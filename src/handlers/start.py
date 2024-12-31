@@ -1,65 +1,38 @@
-# service_bot/src/handlers/start.py
+"""
+Обробник команди /start та головного меню
+"""
 from telegram import Update
 from telegram.ext import ContextTypes
-from keyboards.reply import get_start_keyboard
+
+from utils.keyboards import get_main_keyboard
+from utils.messages import WELCOME_MESSAGE
+from config import logger
+from models.dialog import DialogManager
+from models.user import UserManager
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Обробник команди /start.
-    Відправляє привітальне повідомлення та показує кнопку створення заявки.
-    
-    Args:
-        update (Update): Об'єкт оновлення Telegram
-        context (ContextTypes.DEFAULT_TYPE): Контекст бота
+    Обробляє команду /start та показує головне меню
     """
-    welcome_text = (
-        "👋 Вітаю! Я бот сервісного центру Bambu Lab Україна.\n\n"
-        "Для створення заявки на сервісне обслуговування натисніть кнопку '📝 Створити заявку' "
-        "або використайте команду /new_request"
+    user = update.effective_user
+    
+    # Отримуємо менеджери з контексту бота
+    dialog_manager = context.bot_data['dialog_manager']
+    user_manager = context.bot_data['user_manager']
+    
+    # Ініціалізуємо користувача
+    user_manager.get_user(
+        user_id=user.id,
+        first_name=user.first_name,
+        last_name=user.last_name or ""
     )
     
-    # Очищаємо дані попередніх заявок, якщо вони є
-    if 'form_data' in context.user_data:
-        context.user_data.clear()
+    # Ініціалізуємо новий діалог
+    dialog_manager.get_dialog(user.id)
+    
+    logger.info(f"Користувач {user.id} ({user.first_name} {user.last_name or ''}) запустив бота")
     
     await update.message.reply_text(
-        welcome_text,
-        reply_markup=get_start_keyboard()
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Обробник команди /help.
-    Відправляє інформацію про можливості бота.
-    """
-    help_text = (
-        "ℹ️ Доступні команди:\n\n"
-        "/start - Почати роботу з ботом\n"
-        "/new_request - Створити нову заявку\n"
-        "/help - Отримати цю довідку\n"
-        "/cancel - Скасувати поточну операцію\n\n"
-        "При створенні заявки дотримуйтесь інструкцій бота. "
-        "Вам потрібно буде надати:\n"
-        "- ПІБ\n"
-        "- Номер телефону\n"
-        "- Номер замовлення (якщо є)\n"
-        "- Модель принтера\n"
-        "- Тип пластику\n"
-        "- Опис проблеми\n"
-        "- Фото проблеми\n"
-        "- Фото налаштувань Bambu Studio"
-    )
-    
-    await update.message.reply_text(help_text)
-
-async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Обробник команди /cancel.
-    Скасовує поточну операцію та очищає дані форми.
-    """
-    context.user_data.clear()
-    
-    await update.message.reply_text(
-        "❌ Операцію скасовано. Щоб почати спочатку, використайте /start",
-        reply_markup=get_start_keyboard()
+        text=WELCOME_MESSAGE,
+        reply_markup=get_main_keyboard()
     )

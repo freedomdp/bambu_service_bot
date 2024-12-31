@@ -1,4 +1,4 @@
-# Bambu Service Bot
+# Service Bot
 
 Telegram бот для сервісного центру Bambu Lab Україна.
 
@@ -8,9 +8,35 @@ Telegram бот для сервісного центру Bambu Lab Україн�
 - Завантаження фото та скріншотів
 - Відправка заявок інженеру
 
-## Встановлення
+## Встановлення та запуск
 
-1. Клонуйте репозиторій:
+1. Створіть віртуальне середовище:
 ```bash
-git clone https://github.com/your-username/bambu-service-bot.git
-cd bambu-service-bot
+python -m venv venv
+```
+
+2. Активуйте віртуальне середовище:
+- Windows:
+```bash
+venv\Scripts\activate
+```
+- Linux/MacOS:
+```bash
+source venv/bin/activate
+```
+
+3. Встановіть залежності:
+```bash
+pip install -r requirements.txt
+```
+
+4. Створіть файл .env та заповніть необхідні змінні:
+```
+TELEGRAM_TOKEN=your_telegram_bot_token
+ENGINEER_TELEGRAM_ID=your_engineer_telegram_id
+```
+
+5. Запустіть бота:
+```bash
+python src/main.py
+```
