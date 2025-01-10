@@ -1,0 +1,18 @@
+steps:
+  # Шаг 1: Сборка Docker-образа
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/bambu-service-bot/telegram-bot:$COMMIT_SHA', '.']
+
+  # Шаг 2: Загрузка Docker-образа в Google Container Registry (GCR)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/bambu-service-bot/telegram-bot:$COMMIT_SHA']
+
+  # Шаг 3: Деплой в Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args: ['gcloud', 'run', 'deploy', 'telegram-bot',
+           '--image', 'gcr.io/bambu-service-bot/telegram-bot:$COMMIT_SHA',
+           '--platform', 'managed',
+           '--region', 'europe-west1',
+           '--allow-unauthenticated',
+           '--set-env-vars', 'TELEGRAM_TOKEN=7119984683:AAFAl3lcvfU1ouvSedJutyRrRnVm407p96M',
+           '--timeout', '300']
