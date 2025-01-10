@@ -1,6 +1,3 @@
-options:
-  logging: CLOUD_LOGGING_ONLY  # Используем только Cloud Logging
-
 steps:
   # Шаг 1: Сборка Docker-образа
   - name: 'gcr.io/cloud-builders/docker'
@@ -17,5 +14,12 @@ steps:
            '--platform', 'managed',
            '--region', 'europe-west1',
            '--allow-unauthenticated',
-           '--set-env-vars', 'TELEGRAM_TOKEN=7119984683:AAFAl3lcvfU1ouvSedJutyRrRnVm407p96M',
+           '--set-env-vars', 'TELEGRAM_TOKEN=${_TELEGRAM_TOKEN}',
+           '--set-env-vars', 'ENGINEER_TELEGRAM_ID=${_ENGINEER_TELEGRAM_ID}',
            '--timeout', '300']
+options:
+  logging: CLOUD_LOGGING_ONLY  # Используем только Cloud Logging
+
+substitutions:
+  _TELEGRAM_TOKEN: '7119984683:AAFAl3lcvfU1ouvSedJutyRrRnVm407p96M'  # Замените на ваш токен
+  _ENGINEER_TELEGRAM_ID: '103059062'  # Замените на ID инженера
