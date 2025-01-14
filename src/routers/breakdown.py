@@ -1,5 +1,6 @@
 from aiogram import Router, F
 import logging
+from aiogram.filters import Command  # Убедимся что этот импорт есть
 
 logger = logging.getLogger(__name__)
 from aiogram.types import Message, Contact
@@ -13,18 +14,28 @@ from services.message_service import MessageService
 from states.breakdown import BreakdownStates
 from utils.validators import validate_phone
 from utils.messages import (
-	REQUEST_NAME, REQUEST_PRINTER_MODEL, REQUEST_ISSUE_DESCRIPTION,
-	REQUEST_PHOTO, ISSUE_CONFIRMED, PHOTO_ADDED, REQUEST_COMPLETED,
-	REVIEW_REQUEST, REQUEST_PHONE
+    REQUEST_NAME, REQUEST_PRINTER_MODEL, REQUEST_ISSUE_DESCRIPTION,
+    REQUEST_PHOTO, ISSUE_CONFIRMED, PHOTO_ADDED, REQUEST_COMPLETED,
+    REVIEW_REQUEST, REQUEST_PHONE, WELCOME_MESSAGE  # Добавим импорт WELCOME_MESSAGE
 )
 from utils.keyboards import (
-	remove_keyboard, get_profile_name_keyboard,
-	get_printer_model_keyboard, get_next_keyboard,
-	get_confirmation_keyboard, get_phone_keyboard,
-	get_main_keyboard
+    remove_keyboard, get_profile_name_keyboard,
+    get_printer_model_keyboard, get_next_keyboard,
+    get_confirmation_keyboard, get_phone_keyboard,
+    get_main_keyboard
 )
 
 router = Router(name="breakdown")
+
+@router.message(Command("start"))
+async def cmd_start(message: Message):
+    """
+    Обработчик команды /start
+    """
+    await message.answer(
+        WELCOME_MESSAGE,
+        reply_markup=get_main_keyboard()
+    )
 
 @router.message(F.text == "🔧 Поломка")
 async def start_breakdown(
@@ -36,18 +47,18 @@ async def start_breakdown(
 ) -> None:
 	"""Початок діалогу про поломку"""
 	user = message.from_user
-	
+
 	# Ініціалізація користувача
 	user_manager.get_user(
 		user_id=user.id,
 		first_name=user.first_name,
 		last_name=user.last_name or ""
 	)
-	
+
 	# Ініціалізація діалогу
 	dialog = dialog_manager.get_dialog(user.id)
 	dialog.current_step = "initial"
-	
+
 	# Встановлення стану та відправка повідомлень
 	await state.set_state(BreakdownStates.waiting_order)
 	await message_service.send_message(
@@ -67,7 +78,7 @@ async def process_order(
 	"""Обробка номера замовлення"""
 	user_id = message.from_user.id
 	order_number = message.text.lower()
-	
+
 	if order_number == "немає":
 		# Якщо користувач не купував у нас
 		dialog_manager.update_dialog(
@@ -75,12 +86,12 @@ async def process_order(
 			order_number=None,
 			current_step='name_input'
 		)
-		
+
 		await message_service.send_message(
 			chat_id=message.chat.id,
 			text="✅ Зафіксували, що ви купували не у нас"
 		)
-		
+
 		# Перехід до введення імені
 		await state.set_state(BreakdownStates.waiting_name)
 		await message_service.send_message(
@@ -95,12 +106,12 @@ async def process_order(
 			order_number=order_number,
 			current_step='printer_model_input'
 		)
-		
+
 		await message_service.send_message(
 			chat_id=message.chat.id,
 			text=f"✅ Зафіксували номер замовлення: {order_number}"
 		)
-		
+
 		# Перехід до вибору моделі принтера
 		await state.set_state(BreakdownStates.waiting_printer_model)
 		await message_service.send_message(
@@ -120,25 +131,25 @@ async def use_profile_name(
 	"""Использование имени из профиля Telegram"""
 	user = message.from_user
 	user_id = user.id
-	
+
 	# Формируем полное имя из данных профиля
 	full_name = f"{user.first_name}"
 	if user.last_name:
 		full_name += f" {user.last_name}"
-	
+
 	# Сохраняем имя в диалоге
 	dialog_manager.update_dialog(
 		user_id,
 		user_name=full_name,
 		current_step='phone_input'
 	)
-	
+
 	# Отправляем подтверждение
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=f"✅ Зафіксували ваше ім'я: {full_name}"
 	)
-	
+
 	# Переходим к вводу телефона
 	await state.set_state(BreakdownStates.waiting_phone)
 	await message_service.send_message(
@@ -157,20 +168,20 @@ async def process_name(
 	"""Обработка введенного имени"""
 	user_id = message.from_user.id
 	name = message.text
-	
+
 	# Сохраняем имя в диалоге
 	dialog_manager.update_dialog(
 		user_id,
 		user_name=name,
 		current_step='phone_input'
 	)
-	
+
 	# Отправляем подтверждение и переходим к телефону
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=f"✅ Зафіксували ваше ім'я: {name}"
 	)
-	
+
 	await state.set_state(BreakdownStates.waiting_phone)
 	await message_service.send_message(
 		chat_id=message.chat.id,
@@ -188,7 +199,7 @@ async def process_phone_from_profile(
 	"""Обработка номера телефона из профиля"""
 	user_id = message.from_user.id
 	contact = message.contact
-	
+
 	if not contact or not contact.phone_number:
 		await message_service.send_message(
 			chat_id=message.chat.id,
@@ -196,10 +207,10 @@ async def process_phone_from_profile(
 			keyboard=remove_keyboard
 		)
 		return
-	
+
 	phone = f"+{contact.phone_number}" if not contact.phone_number.startswith('+') else contact.phone_number
 	is_valid, validated_phone = validate_phone(phone)
-	
+
 	if not is_valid:
 		await message_service.send_message(
 			chat_id=message.chat.id,
@@ -207,19 +218,19 @@ async def process_phone_from_profile(
 			keyboard=remove_keyboard
 		)
 		return
-	
+
 	# Сохраняем телефон и переходим к выбору модели
 	dialog_manager.update_dialog(
 		user_id,
 		phone_number=validated_phone,
 		current_step='printer_model_input'
 	)
-	
+
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=f"✅ Зафіксували номер телефону: {validated_phone}"
 	)
-	
+
 	await state.set_state(BreakdownStates.waiting_printer_model)
 	await message_service.send_message(
 		chat_id=message.chat.id,
@@ -237,7 +248,7 @@ async def process_phone(
 	"""Обработка введенного номера телефона"""
 	user_id = message.from_user.id
 	phone = message.text
-	
+
 	is_valid, result = validate_phone(phone)
 	if not is_valid:
 		await message_service.send_message(
@@ -246,19 +257,19 @@ async def process_phone(
 			keyboard=get_phone_keyboard()
 		)
 		return
-	
+
 	# Сохраняем телефон и переходим к выбору модели
 	dialog_manager.update_dialog(
 		user_id,
 		phone_number=result,
 		current_step='printer_model_input'
 	)
-	
+
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=f"✅ Зафіксували номер телефону: {result}"
 	)
-	
+
 	await state.set_state(BreakdownStates.waiting_printer_model)
 	await message_service.send_message(
 		chat_id=message.chat.id,
@@ -276,21 +287,21 @@ async def process_printer_model(
 	"""Обработка выбора модели принтера"""
 	user_id = message.from_user.id
 	model = message.text
-	
+
 	# Сохраняем модель принтера и обновляем состояние диалога
 	dialog_manager.update_dialog(
 		user_id,
 		printer_model=model,
 		current_step='issue_description'
 	)
-	
+
 	# Отправляем подтверждение и убираем клавиатуру
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=f"✅ Зафіксували модель принтеру: {model}",
 		keyboard=remove_keyboard  # Используем remove_keyboard вместо get_main_keyboard
 	)
-	
+
 	# Переходим к следующему этапу
 	await state.set_state(BreakdownStates.waiting_description)
 	await message_service.send_message(
@@ -309,20 +320,20 @@ async def process_description(
 	"""Обработка описания проблемы"""
 	user_id = message.from_user.id
 	description = message.text
-	
+
 	# Сохраняем описание проблемы
 	dialog_manager.update_dialog(
 		user_id,
 		issue_description=description,
 		current_step='waiting_media'
 	)
-	
+
 	# Отправляем подтверждение
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=f"{ISSUE_CONFIRMED}:\n{description}"
 	)
-	
+
 	# Переходим к этапу фотографий
 	await state.set_state(BreakdownStates.waiting_media)
 	await message_service.send_message(
@@ -341,11 +352,11 @@ async def finish_photos(
 	"""Завершение этапа отправки фото"""
 	user_id = message.from_user.id
 	dialog = dialog_manager.get_dialog(user_id)
-	
+
 	# Переходим к этапу подтверждения
 	dialog.current_step = 'confirmation'
 	await state.set_state(BreakdownStates.confirmation)
-	
+
 	# Отправляем сообщение с данными заявки
 	await message_service.send_message(
 		chat_id=message.chat.id,
@@ -363,20 +374,20 @@ async def confirm_request(
 	"""Подтверждение заявки"""
 	user_id = message.from_user.id
 	dialog = dialog_manager.get_dialog(user_id)
-	
+
 	# Отправляем сообщение пользователю
 	await message_service.send_message(
 		chat_id=message.chat.id,
 		text=REQUEST_COMPLETED
 	)
-	
+
 	# Отправляем заявку инженеру
 	engineer_id = config.ENGINEER_TELEGRAM_ID
 	await message_service.send_message(
 		chat_id=engineer_id,
 		text=f"🆕 Нова заявка!\n\n{dialog.get_summary()}"
 	)
-	
+
 	# Отправляем медиафайлы инженеру
 	if hasattr(dialog, 'photo_files') and dialog.photo_files:
 		for photo_id in dialog.photo_files:
@@ -387,7 +398,7 @@ async def confirm_request(
 				)
 			except Exception as e:
 				logger.error(f"Error sending photo to engineer: {e}")
-	
+
 	if hasattr(dialog, 'video_files') and dialog.video_files:
 		for video_id in dialog.video_files:
 			try:
@@ -397,11 +408,11 @@ async def confirm_request(
 				)
 			except Exception as e:
 				logger.error(f"Error sending video to engineer: {e}")
-	
+
 	# Очищаем состояние и диалог
 	await state.clear()
 	dialog_manager.clear_dialog(user_id)  # Очищаем все данные диалога
-	
+
 	# Показываем главное меню
 	await message_service.send_message(
 		chat_id=message.chat.id,
@@ -437,6 +448,3 @@ async def process_media(
 	"""Обработка фото/видео файлов"""
 	photo_upload = PhotoUploadComponent(dialog_manager, message_service)
 	await photo_upload.process_input(message)
-
-
-
