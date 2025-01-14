@@ -462,13 +462,8 @@ async def cancel_request(
         text="❌ Заявку скасовано"
     )
 
-    # Показываем приветственное сообщение и меню
-    await message_service.send_message(
-        chat_id=message.chat.id,
-        text="Вітаю! Я бот підтримки Bambu Lab Україна 🇺🇦\n\nОберіть, будь ласка, тему звернення:",
-        keyboard=get_main_keyboard()
-    )
-
+    # Вызываем команду /start
+    await cmd_start(message)
 
 @router.message(BreakdownStates.waiting_media, F.photo | F.video)
 async def process_media(
