@@ -5,7 +5,6 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
     kb = [[
         KeyboardButton(text="🔧 Поломка"),
         KeyboardButton(text="🖨 Якість друку"),
-        KeyboardButton(text="❓ Питання / Відповідь")
     ]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -52,4 +51,3 @@ def get_next_keyboard() -> ReplyKeyboardMarkup:
 
 # Створюємо об'єкт для видалення клавіатури
 remove_keyboard = ReplyKeyboardRemove()
-
