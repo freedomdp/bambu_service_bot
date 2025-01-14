@@ -366,60 +366,70 @@ async def finish_photos(
 
 @router.message(BreakdownStates.confirmation, F.text == "✅ Підтверджую")
 async def confirm_request(
-	message: Message,
-	state: FSMContext,
-	dialog_manager: DialogManager,
-	message_service: MessageService
+    message: Message,
+    state: FSMContext,
+    dialog_manager: DialogManager,
+    message_service: MessageService
 ) -> None:
-	"""Подтверждение заявки"""
-	user_id = message.from_user.id
-	dialog = dialog_manager.get_dialog(user_id)
+    """Подтверждение заявки"""
+    user_id = message.from_user.id
+    dialog = dialog_manager.get_dialog(user_id)
 
-	# Отправляем сообщение пользователю
-	await message_service.send_message(
-		chat_id=message.chat.id,
-		text=REQUEST_COMPLETED
-	)
+    # Сначала отправляем заявку инженеру
+    engineer_id = config.ENGINEER_TELEGRAM_ID
+    await message_service.send_message(
+        chat_id=engineer_id,
+        text=f"🆕 Нова заявка!\n\n{dialog.get_summary()}"
+    )
 
-	# Отправляем заявку инженеру
-	engineer_id = config.ENGINEER_TELEGRAM_ID
-	await message_service.send_message(
-		chat_id=engineer_id,
-		text=f"🆕 Нова заявка!\n\n{dialog.get_summary()}"
-	)
+    # Отправляем медиафайлы инженеру
+    if hasattr(dialog, 'photo_files') and dialog.photo_files:
+        for photo_id in dialog.photo_files:
+            try:
+                await message_service.send_photo(
+                    chat_id=engineer_id,
+                    photo=photo_id
+                )
+            except Exception as e:
+                logger.error(f"Error sending photo to engineer: {e}")
 
-	# Отправляем медиафайлы инженеру
-	if hasattr(dialog, 'photo_files') and dialog.photo_files:
-		for photo_id in dialog.photo_files:
-			try:
-				await message_service.send_photo(
-					chat_id=engineer_id,
-					photo=photo_id
-				)
-			except Exception as e:
-				logger.error(f"Error sending photo to engineer: {e}")
+    if hasattr(dialog, 'video_files') and dialog.video_files:
+        for video_id in dialog.video_files:
+            try:
+                await message_service.send_video(
+                    chat_id=engineer_id,
+                    video=video_id
+                )
+            except Exception as e:
+                logger.error(f"Error sending video to engineer: {e}")
 
-	if hasattr(dialog, 'video_files') and dialog.video_files:
-		for video_id in dialog.video_files:
-			try:
-				await message_service.send_video(
-					chat_id=engineer_id,
-					video=video_id
-				)
-			except Exception as e:
-				logger.error(f"Error sending video to engineer: {e}")
+    # Очищаем историю сообщений
+    try:
+        last_message_id = message.message_id
+        for i in range(last_message_id - 100, last_message_id + 1):
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=i)
+            except Exception:
+                continue
+    except Exception as e:
+        logger.error(f"Error clearing chat history: {e}")
 
-	# Очищаем состояние и диалог
-	await state.clear()
-	dialog_manager.clear_dialog(user_id)  # Очищаем все данные диалога
+    # Очищаем состояние и диалог
+    await state.clear()
+    dialog_manager.clear_dialog(user_id)
 
-	# Показываем главное меню
-	await message_service.send_message(
-		chat_id=message.chat.id,
-		text="Оберіть, будь ласка, тему звернення:",
-		keyboard=get_main_keyboard()
-	)
+    # Отправляем только два финальных сообщения
+    await message_service.send_message(
+        chat_id=message.chat.id,
+        text="✅ Дякуємо!\nВашу заявку прийнято.\n\nПриблизний термін оброки заявки - 2 робочих дні."
+    )
 
+    # Показываем главное меню
+    await message_service.send_message(
+        chat_id=message.chat.id,
+        text="Оберіть, будь ласка, тему звернення:",
+        keyboard=get_main_keyboard()
+    )
 
 @router.message(BreakdownStates.confirmation, F.text == "❌ Скасувати")
 async def cancel_request(
