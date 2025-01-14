@@ -433,19 +433,41 @@ async def confirm_request(
 
 @router.message(BreakdownStates.confirmation, F.text == "❌ Скасувати")
 async def cancel_request(
-	message: Message,
-	state: FSMContext,
-	dialog_manager: DialogManager,
-	message_service: MessageService
+    message: Message,
+    state: FSMContext,
+    dialog_manager: DialogManager,
+    message_service: MessageService
 ) -> None:
-	"""Отмена заявки"""
-	await message_service.send_message(
-		chat_id=message.chat.id,
-		text="❌ Заявку скасовано",
-		keyboard=remove_keyboard
-	)
-	# Сбрасываем состояние
-	await state.clear()
+    """Отмена заявки"""
+    user_id = message.from_user.id
+
+    # Очищаем историю сообщений
+    try:
+        last_message_id = message.message_id
+        for i in range(last_message_id - 100, last_message_id + 1):
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=i)
+            except Exception:
+                continue
+    except Exception as e:
+        logger.error(f"Error clearing chat history: {e}")
+
+    # Очищаем состояние и диалог
+    await state.clear()
+    dialog_manager.clear_dialog(user_id)
+
+    # Отправляем сообщение об отмене
+    await message_service.send_message(
+        chat_id=message.chat.id,
+        text="❌ Заявку скасовано"
+    )
+
+    # Показываем приветственное сообщение и меню
+    await message_service.send_message(
+        chat_id=message.chat.id,
+        text="Вітаю! Я бот підтримки Bambu Lab Україна 🇺🇦\n\nОберіть, будь ласка, тему звернення:",
+        keyboard=get_main_keyboard()
+    )
 
 
 @router.message(BreakdownStates.waiting_media, F.photo | F.video)
