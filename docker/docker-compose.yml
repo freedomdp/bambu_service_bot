@@ -1,0 +1,24 @@
+# service_bot/docker/docker-compose.yml
+version: '3.8'
+
+services:
+  bot:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - ENGINEER_TELEGRAM_ID=${ENGINEER_TELEGRAM_ID}
+    volumes:
+      - ../src:/app
+      - ../logs:/app/logs
+    restart: always
+    
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  redis_data:

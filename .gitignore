@@ -1,14 +1,27 @@
+# Virtual Environment
 venv/
 env/
-.env
+
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.egg
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Mac OS
+.DS_Store
+
+# Build artifacts
 *.egg-info/
 dist/
 build/
-.DS_Store
+*.so
