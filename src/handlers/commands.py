@@ -38,22 +38,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def new_application(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Початок створення нової заявки"""
     from .conversation import WAITING_NAME, ConversationHandler
-
+    from ..main import reminder_service
+    
     user_id = update.effective_user.id
-
-    # Якщо вже є активна заявка, видаляємо її
+    
+    # Якщо вже є активна заявка, видаляємо її и отменяем напоминания
     if user_id in active_applications:
+        if reminder_service:
+            reminder_service.cancel_reminders(user_id)
         del active_applications[user_id]
-
+    
     # Створюємо нову заявку
     active_applications[user_id] = Application(user_id=user_id)
-
+    
     await update.message.reply_text(
         "📝 <b>Створення нової заявки</b>\n\n"
         "Будь ласка, введіть ваше <b>ім'я та прізвище</b>:",
         parse_mode='HTML'
     )
-
+    
     return WAITING_NAME
 
 

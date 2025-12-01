@@ -1,9 +1,10 @@
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
 from ..models.application import Application
 from ..utils.validators import validate_email, validate_phone
 from ..keyboards.inline import (
-    get_skip_keyboard,
+    get_skip_keyboard, 
     get_confirm_keyboard,
     get_printer_model_keyboard,
     get_filament_type_keyboard,
@@ -13,6 +14,8 @@ from ..keyboards.inline import (
     FILAMENT_MANUFACTURERS
 )
 from .commands import active_applications
+
+logger = logging.getLogger(__name__)
 
 # Стани розмови
 (
@@ -32,29 +35,36 @@ from .commands import active_applications
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отримання імені та прізвища"""
+    from ..services.context import get_reminder_service
+    
     user_id = update.effective_user.id
-
+    
     if user_id not in active_applications:
         await update.message.reply_text(
             "❌ Помилка. Будь ласка, почніть з команди /new_application"
         )
         return ConversationHandler.END
-
+    
     full_name = update.message.text.strip()
-
+    
     if len(full_name) < 2:
         await update.message.reply_text(
             "❌ Будь ласка, введіть коректне ім'я та прізвище:"
         )
         return WAITING_NAME
-
+    
     active_applications[user_id].full_name = full_name
-
+    
+    # Планируем напоминания после ввода имени
+    reminder_service = get_reminder_service()
+    if reminder_service:
+        reminder_service.schedule_reminders(user_id, active_applications[user_id])
+    
     await update.message.reply_text(
         "✅ Дякую! Тепер введіть ваш <b>email адресу</b>:",
         parse_mode='HTML'
     )
-
+    
     return WAITING_EMAIL
 
 
@@ -221,51 +231,94 @@ async def get_filament_manufacturer_callback(update: Update, context: ContextTyp
 
 async def get_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отримання фото/відео"""
+    from ..services.context import get_media_storage
+    
     user_id = update.effective_user.id
-
-    if update.message.photo:
-        # Беремо найбільше фото (останнє в списку)
-        photo = update.message.photo[-1]
-        file_id = photo.file_id
-        active_applications[user_id].photos.append(file_id)
-
-        count = len(active_applications[user_id].photos)
-        if count < 10:
-            await update.message.reply_text(
-                f"✅ Фото додано ({count}/10). Можете надіслати ще фото або натисніть 'Пропустити':",
-                reply_markup=get_skip_keyboard()
-            )
+    media_storage = get_media_storage()
+    
+    try:
+        if update.message.photo:
+            # Беремо найбільше фото (останнє в списку)
+            photo = update.message.photo[-1]
+            file_id = photo.file_id
+            
+            # Сохраняем временный file_id
+            active_applications[user_id].photo_file_ids.append(file_id)
+            
+            # Скачиваем и сохраняем файл
+            if media_storage:
+                file = await context.bot.get_file(file_id)
+                file_data = await file.download_as_bytearray()
+                _, file_url = media_storage.save_file(
+                    bytes(file_data), 
+                    'photo', 
+                    user_id
+                )
+                active_applications[user_id].photos.append(file_url)
+            else:
+                # Если хранилище не настроено, используем file_id
+                active_applications[user_id].photos.append(file_id)
+            
+            count = len(active_applications[user_id].photos)
+            if count < 10:
+                await update.message.reply_text(
+                    f"✅ Фото додано ({count}/10). Можете надіслати ще фото або натисніть 'Пропустити':",
+                    reply_markup=get_skip_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    "✅ Досягнуто максимум фото (10). Переходимо далі.",
+                    reply_markup=get_skip_keyboard()
+                )
+                return await skip_photos(update, context)
+            
+            return WAITING_PHOTOS
+        
+        elif update.message.video:
+            file_id = update.message.video.file_id
+            
+            # Сохраняем временный file_id
+            active_applications[user_id].photo_file_ids.append(file_id)
+            
+            # Скачиваем и сохраняем файл
+            if media_storage:
+                file = await context.bot.get_file(file_id)
+                file_data = await file.download_as_bytearray()
+                _, file_url = media_storage.save_file(
+                    bytes(file_data), 
+                    'video', 
+                    user_id
+                )
+                active_applications[user_id].photos.append(file_url)
+            else:
+                active_applications[user_id].photos.append(file_id)
+            
+            count = len(active_applications[user_id].photos)
+            if count < 10:
+                await update.message.reply_text(
+                    f"✅ Відео додано ({count}/10). Можете надіслати ще файли або натисніть 'Пропустити':",
+                    reply_markup=get_skip_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    "✅ Досягнуто максимум файлів (10). Переходимо далі.",
+                    reply_markup=get_skip_keyboard()
+                )
+                return await skip_photos(update, context)
+            
+            return WAITING_PHOTOS
+        
         else:
             await update.message.reply_text(
-                "✅ Досягнуто максимум фото (10). Переходимо далі.",
+                "❌ Будь ласка, надішліть фото або відео, або натисніть 'Пропустити':",
                 reply_markup=get_skip_keyboard()
             )
-            return await skip_photos(update, context)
-
-        return WAITING_PHOTOS
-
-    elif update.message.video:
-        file_id = update.message.video.file_id
-        active_applications[user_id].photos.append(file_id)
-
-        count = len(active_applications[user_id].photos)
-        if count < 10:
-            await update.message.reply_text(
-                f"✅ Відео додано ({count}/10). Можете надіслати ще файли або натисніть 'Пропустити':",
-                reply_markup=get_skip_keyboard()
-            )
-        else:
-            await update.message.reply_text(
-                "✅ Досягнуто максимум файлів (10). Переходимо далі.",
-                reply_markup=get_skip_keyboard()
-            )
-            return await skip_photos(update, context)
-
-        return WAITING_PHOTOS
-
-    else:
+            return WAITING_PHOTOS
+            
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении медиафайла: {e}")
         await update.message.reply_text(
-            "❌ Будь ласка, надішліть фото або відео, або натисніть 'Пропустити':",
+            "❌ Помилка при збереженні файлу. Спробуйте ще раз або пропустіть цей крок.",
             reply_markup=get_skip_keyboard()
         )
         return WAITING_PHOTOS
@@ -294,19 +347,43 @@ async def skip_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def get_model_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отримання 3D моделі"""
+    from ..services.context import get_media_storage
+    
     user_id = update.effective_user.id
-
+    media_storage = get_media_storage()
+    
     if update.message.document:
-        file_id = update.message.document.file_id
-        active_applications[user_id].model_file = file_id
-
-        await update.message.reply_text(
-            "✅ 3D модель додано!\n\n"
-            "📝 Тепер опишіть <b>проблему та додаткову інформацію</b>:",
-            parse_mode='HTML'
-        )
-
-        return WAITING_DESCRIPTION
+        try:
+            file_id = update.message.document.file_id
+            active_applications[user_id].model_file_id = file_id
+            
+            # Скачиваем и сохраняем файл
+            if media_storage:
+                file = await context.bot.get_file(file_id)
+                file_data = await file.download_as_bytearray()
+                _, file_url = media_storage.save_file(
+                    bytes(file_data), 
+                    'model', 
+                    user_id
+                )
+                active_applications[user_id].model_file = file_url
+            else:
+                active_applications[user_id].model_file = file_id
+            
+            await update.message.reply_text(
+                "✅ 3D модель додано!\n\n"
+                "📝 Тепер опишіть <b>проблему та додаткову інформацію</b>:",
+                parse_mode='HTML'
+            )
+            
+            return WAITING_DESCRIPTION
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении 3D модели: {e}")
+            await update.message.reply_text(
+                "❌ Помилка при збереженні файлу. Спробуйте ще раз або пропустіть цей крок.",
+                reply_markup=get_skip_keyboard()
+            )
+            return WAITING_MODEL_FILE
     else:
         await update.message.reply_text(
             "❌ Будь ласка, надішліть файл 3D моделі або натисніть 'Пропустити':",

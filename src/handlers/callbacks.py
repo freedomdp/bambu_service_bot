@@ -151,6 +151,12 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode='HTML'
         )
 
+        # Отменяем напоминания
+        from ..services.context import get_reminder_service
+        reminder_service = get_reminder_service()
+        if reminder_service:
+            reminder_service.cancel_reminders(user_id)
+        
         # Видаляємо заявку з активних
         del active_applications[user_id]
 

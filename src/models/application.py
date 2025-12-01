@@ -15,8 +15,10 @@ class Application:
     filament_type: Optional[str] = None
     filament_manufacturer: Optional[str] = None
     problem_description: Optional[str] = None
-    photos: List[str] = field(default_factory=list)  # Список file_id фото/відео
-    model_file: Optional[str] = None  # file_id 3D моделі
+    photos: List[str] = field(default_factory=list)  # Список URL фото/відео
+    photo_file_ids: List[str] = field(default_factory=list)  # Временные file_id для сохранения
+    model_file: Optional[str] = None  # URL 3D моделі
+    model_file_id: Optional[str] = None  # Временный file_id для сохранения
     created_at: datetime = field(default_factory=datetime.now)
 
     def is_complete(self) -> bool:
@@ -55,8 +57,12 @@ class Application:
 
         if self.photos:
             message += f"\n📷 <b>Фото/відео:</b> {len(self.photos)} файлів\n"
+            for i, photo_url in enumerate(self.photos[:5], 1):  # Показываем первые 5 ссылок
+                message += f"  {i}. {photo_url}\n"
+            if len(self.photos) > 5:
+                message += f"  ... та ще {len(self.photos) - 5} файлів\n"
 
         if self.model_file:
-            message += f"\n📦 <b>3D модель:</b> додано\n"
+            message += f"\n📦 <b>3D модель:</b> {self.model_file}\n"
 
         return message
